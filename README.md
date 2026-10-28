@@ -189,6 +189,19 @@ from `wrangler.toml` on deploy.
 Open the deployed URL, enter the `API_TOKEN` you set, and add a monitor. The cron sweep picks it up
 on the next tick.
 
+### Public demo mode
+
+`PUBLIC_READ_ONLY` in `wrangler.toml` controls whether the deployment can be browsed without a
+token:
+
+| Value | Behaviour |
+|---|---|
+| `"true"` (default) | Anyone can view monitors and incidents. Creating, editing, pausing, and deleting still require `API_TOKEN`. Use this to share a live link. |
+| `"false"` | Every `/api` route requires the token. Use this for a private deployment. |
+
+Writes are never public in either mode — creating a monitor makes the Worker issue a request to a
+caller-supplied URL, so an unauthenticated write path would be an open request proxy.
+
 ### Notes
 
 - **Every service used here runs on the Workers Free plan.** The relevant daily/monthly free
@@ -204,11 +217,13 @@ on the next tick.
 
 ## API
 
-All `/api/*` routes except `/api/health` require `Authorization: Bearer <API_TOKEN>`.
+Mutating routes always require `Authorization: Bearer <API_TOKEN>`. `GET` routes also require it
+unless `PUBLIC_READ_ONLY` is enabled (see [Public demo mode](#public-demo-mode)).
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/health` | Unauthenticated liveness check |
+| `GET` | `/api/config` | Unauthenticated; tells the dashboard whether reads are public |
 | `GET` | `/api/monitors` | List monitors with live Durable Object status |
 | `POST` | `/api/monitors` | Create a monitor |
 | `GET` | `/api/monitors/:id` | Monitor detail with check history and incidents |
