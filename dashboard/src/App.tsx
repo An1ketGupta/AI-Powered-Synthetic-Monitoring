@@ -1,51 +1,113 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
-import { clearToken, getToken, setToken } from "./api";
+import { api, clearToken, getToken, setToken } from "./api";
+import { SessionProvider } from "./session";
 import { MonitorsPage } from "./pages/MonitorsPage";
 import { MonitorDetailPage } from "./pages/MonitorDetailPage";
 import { IncidentsPage } from "./pages/IncidentsPage";
 
 export function App() {
   const [token, setTokenState] = useState(getToken());
+  const [publicReadOnly, setPublicReadOnly] = useState<boolean | null>(null);
+  const [showTokenGate, setShowTokenGate] = useState(false);
 
-  if (!token) return <TokenGate onSave={setTokenState} />;
+  useEffect(() => {
+    api
+      .getConfig()
+      .then((config) => setPublicReadOnly(config.publicReadOnly))
+      .catch(() => setPublicReadOnly(false));
+  }, []);
+
+  // Wait for the config before rendering: showing the token gate to someone
+  // who could have browsed the public demo would be the wrong first impression.
+  if (publicReadOnly === null) {
+    return (
+      <div className="layout">
+        <div className="empty">Loading…</div>
+      </div>
+    );
+  }
+
+  const needsToken = !token && !publicReadOnly;
+  if (needsToken || showTokenGate) {
+    return (
+      <TokenGate
+        dismissible={publicReadOnly}
+        onDismiss={() => setShowTokenGate(false)}
+        onSave={(value) => {
+          setTokenState(value);
+          setShowTokenGate(false);
+        }}
+      />
+    );
+  }
 
   return (
-    <div className="layout">
-      <header className="topbar">
-        <Link to="/" className="brand">
-          EdgeWatch <span>synthetic monitoring on Cloudflare</span>
-        </Link>
-        <nav className="tabs">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-            Monitors
-          </NavLink>
-          <NavLink to="/incidents" className={({ isActive }) => (isActive ? "active" : "")}>
-            Incidents
-          </NavLink>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              clearToken();
-              setTokenState(null);
-            }}
-          >
-            Sign out
-          </a>
-        </nav>
-      </header>
+    <SessionProvider value={{ canWrite: Boolean(token) }}>
+      <div className="layout">
+        <header className="topbar">
+          <Link to="/" className="brand">
+            EdgeWatch <span>synthetic monitoring on Cloudflare</span>
+          </Link>
+          <nav className="tabs">
+            <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
+              Monitors
+            </NavLink>
+            <NavLink to="/incidents" className={({ isActive }) => (isActive ? "active" : "")}>
+              Incidents
+            </NavLink>
+            {token ? (
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  clearToken();
+                  setTokenState(null);
+                }}
+              >
+                Sign out
+              </a>
+            ) : (
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowTokenGate(true);
+                }}
+              >
+                Admin sign in
+              </a>
+            )}
+          </nav>
+        </header>
 
-      <Routes>
-        <Route path="/" element={<MonitorsPage />} />
-        <Route path="/monitors/:id" element={<MonitorDetailPage />} />
-        <Route path="/incidents" element={<IncidentsPage />} />
-      </Routes>
-    </div>
+        {!token && (
+          <div className="banner">
+            <strong>Live read-only demo.</strong> These monitors are really being checked from
+            Cloudflare's edge every minute, and the incident notes below were written by Workers AI.
+            Adding or changing monitors requires the API token.
+          </div>
+        )}
+
+        <Routes>
+          <Route path="/" element={<MonitorsPage />} />
+          <Route path="/monitors/:id" element={<MonitorDetailPage />} />
+          <Route path="/incidents" element={<IncidentsPage />} />
+        </Routes>
+      </div>
+    </SessionProvider>
   );
 }
 
-function TokenGate({ onSave }: { onSave: (token: string) => void }) {
+function TokenGate({
+  onSave,
+  dismissible,
+  onDismiss,
+}: {
+  onSave: (token: string) => void;
+  dismissible: boolean;
+  onDismiss: () => void;
+}) {
   const [value, setValue] = useState("");
 
   return (
@@ -72,9 +134,16 @@ function TokenGate({ onSave }: { onSave: (token: string) => void }) {
           onChange={(e) => setValue(e.target.value)}
           autoFocus
         />
-        <button className="primary" type="submit" style={{ marginTop: "0.9rem" }}>
-          Continue
-        </button>
+        <div style={{ marginTop: "0.9rem", display: "flex", gap: "0.5rem" }}>
+          <button className="primary" type="submit">
+            Continue
+          </button>
+          {dismissible && (
+            <button type="button" onClick={onDismiss}>
+              Back to demo
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );

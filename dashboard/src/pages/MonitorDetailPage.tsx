@@ -6,8 +6,10 @@ import { StatusPill } from "../components/StatusPill";
 import { LatencyStrip } from "../components/LatencyStrip";
 import { IncidentCard } from "../components/IncidentCard";
 import { formatDateTime, formatRelative } from "../lib/format";
+import { useSession } from "../session";
 
 export function MonitorDetailPage() {
+  const { canWrite } = useSession();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [monitor, setMonitor] = useState<MonitorDetail | null>(null);
@@ -92,14 +94,16 @@ export function MonitorDetailPage() {
         </p>
       </div>
 
-      <div className="card">
-        <button onClick={togglePaused} disabled={busy}>
-          {monitor.is_active === 0 ? "Resume checks" : "Pause checks"}
-        </button>{" "}
-        <button className="danger" onClick={remove} disabled={busy}>
-          Delete monitor
-        </button>
-      </div>
+      {canWrite && (
+        <div className="card">
+          <button onClick={togglePaused} disabled={busy}>
+            {monitor.is_active === 0 ? "Resume checks" : "Pause checks"}
+          </button>{" "}
+          <button className="danger" onClick={remove} disabled={busy}>
+            Delete monitor
+          </button>
+        </div>
+      )}
 
       <h2>Incidents</h2>
       {monitor.incidents.length === 0 ? (

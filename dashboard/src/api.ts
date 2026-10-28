@@ -40,6 +40,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  getConfig: () => request<{ publicReadOnly: boolean }>("/config"),
   listMonitors: () => request<Monitor[]>("/monitors"),
   getMonitor: (id: string) => request<MonitorDetail>(`/monitors/${id}`),
   createMonitor: (input: NewMonitorInput) =>

@@ -4,6 +4,7 @@ import { api } from "../api";
 import type { Monitor, NewMonitorInput } from "../types";
 import { StatusPill } from "../components/StatusPill";
 import { formatRelative } from "../lib/format";
+import { useSession } from "../session";
 
 const EMPTY_FORM: NewMonitorInput = {
   name: "",
@@ -15,6 +16,7 @@ const EMPTY_FORM: NewMonitorInput = {
 };
 
 export function MonitorsPage() {
+  const { canWrite } = useSession();
   const [monitors, setMonitors] = useState<Monitor[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -45,7 +47,9 @@ export function MonitorsPage() {
       setForm(EMPTY_FORM);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create monitor.");
+      setError(
+        err instanceof Error ? err.message : "Failed to create monitor.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -55,88 +59,111 @@ export function MonitorsPage() {
     <>
       <h1>Monitors</h1>
       <p className="muted">
-        Checked from Cloudflare's edge every minute. Incidents open after two consecutive failures.
+        Checked from Cloudflare's edge every minute. Incidents open after two
+        consecutive failures.
       </p>
 
       {error && <div className="error">{error}</div>}
 
-      <h2>Add a monitor</h2>
-      <form className="card" onSubmit={handleCreate}>
-        <div className="field-grid">
-          <div>
-            <label htmlFor="name">Name</label>
-            <input
-              id="name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Checkout API"
-              required
-            />
-          </div>
-          <div style={{ gridColumn: "span 2" }}>
-            <label htmlFor="url">URL</label>
-            <input
-              id="url"
-              type="url"
-              value={form.url}
-              onChange={(e) => setForm({ ...form, url: e.target.value })}
-              placeholder="https://api.example.com/health"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="method">Method</label>
-            <select
-              id="method"
-              value={form.method}
-              onChange={(e) => setForm({ ...form, method: e.target.value })}
-            >
-              <option>GET</option>
-              <option>HEAD</option>
-              <option>POST</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="expected">Expected status</label>
-            <input
-              id="expected"
-              type="number"
-              value={form.expected_status}
-              onChange={(e) => setForm({ ...form, expected_status: Number(e.target.value) })}
-            />
-          </div>
-          <div>
-            <label htmlFor="interval">Interval (s)</label>
-            <input
-              id="interval"
-              type="number"
-              min={60}
-              step={60}
-              value={form.interval_seconds}
-              onChange={(e) => setForm({ ...form, interval_seconds: Number(e.target.value) })}
-            />
-          </div>
-          <div>
-            <label htmlFor="timeout">Timeout (ms)</label>
-            <input
-              id="timeout"
-              type="number"
-              min={1000}
-              step={500}
-              value={form.timeout_ms}
-              onChange={(e) => setForm({ ...form, timeout_ms: Number(e.target.value) })}
-            />
-          </div>
-        </div>
-        <button className="primary" type="submit" disabled={submitting}>
-          {submitting ? "Adding…" : "Add monitor"}
-        </button>
-      </form>
+      {canWrite && (
+        <>
+          <h2>Add a monitor</h2>
+          <form className="card" onSubmit={handleCreate}>
+            <div className="field-grid">
+              <div>
+                <label htmlFor="name">Name</label>
+                <input
+                  id="name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Checkout API"
+                  required
+                />
+              </div>
+              <div style={{ gridColumn: "span 2" }}>
+                <label htmlFor="url">URL</label>
+                <input
+                  id="url"
+                  type="url"
+                  value={form.url}
+                  onChange={(e) => setForm({ ...form, url: e.target.value })}
+                  placeholder="https://api.example.com/health"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="method">Method</label>
+                <select
+                  id="method"
+                  value={form.method}
+                  onChange={(e) => setForm({ ...form, method: e.target.value })}
+                >
+                  <option>GET</option>
+                  <option>HEAD</option>
+                  <option>POST</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="expected">Expected status</label>
+                <input
+                  id="expected"
+                  type="number"
+                  value={form.expected_status}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      expected_status: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="interval">Interval (s)</label>
+                <input
+                  id="interval"
+                  type="number"
+                  min={60}
+                  step={60}
+                  value={form.interval_seconds}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      interval_seconds: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="timeout">Timeout (ms)</label>
+                <input
+                  id="timeout"
+                  type="number"
+                  min={1000}
+                  step={500}
+                  value={form.timeout_ms}
+                  onChange={(e) =>
+                    setForm({ ...form, timeout_ms: Number(e.target.value) })
+                  }
+                />
+              </div>
+            </div>
+            <button className="primary" type="submit" disabled={submitting}>
+              {submitting ? "Adding…" : "Add monitor"}
+            </button>
+          </form>
+        </>
+      )}
 
       <h2>Watching {monitors?.length ?? 0}</h2>
 
       {monitors === null && <div className="empty">Loading…</div>}
-      {monitors?.length === 0 && <div className="card empty">No monitors yet. Add one above to start.</div>}
+      {monitors?.length === 0 && (
+        <div className="card empty">
+          {canWrite
+            ? "No monitors yet. Add one above to start."
+            : "No monitors are being watched yet."}
+        </div>
+      )}
 
       {monitors?.map((monitor) => (
         <div className="card" key={monitor.id}>
@@ -150,8 +177,13 @@ export function MonitorsPage() {
               </span>
             </div>
             <div className="right">
-              <span className="muted">checked {formatRelative(monitor.live.lastCheckedAt)}</span>
-              <StatusPill status={monitor.live.status} paused={monitor.is_active === 0} />
+              <span className="muted">
+                checked {formatRelative(monitor.live.lastCheckedAt)}
+              </span>
+              <StatusPill
+                status={monitor.live.status}
+                paused={monitor.is_active === 0}
+              />
             </div>
           </div>
         </div>

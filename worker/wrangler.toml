@@ -9,6 +9,10 @@ DEFAULT_CHECK_INTERVAL_SECONDS = "60"
 DEFAULT_TIMEOUT_MS = "10000"
 CONSECUTIVE_FAILURES_FOR_INCIDENT = "2"
 SIMILAR_INCIDENTS_TOP_K = "3"
+# "true" exposes GET /api/monitors and /api/incidents without a token so the
+# deployment can be shared as a live demo. Writes always require API_TOKEN.
+# Set to "false" for a private deployment.
+PUBLIC_READ_ONLY = "true"
 
 # --- Static assets (React dashboard build) ---------------------------------
 [assets]

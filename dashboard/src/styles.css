@@ -349,6 +349,21 @@ button.danger:hover:not(:disabled) {
   margin-bottom: 0.9rem;
 }
 
+.banner {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  padding: 0.7rem 0.95rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.banner strong {
+  color: var(--text);
+}
+
 .empty {
   text-align: center;
   padding: 2.5rem 1rem;

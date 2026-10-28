@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { requireApiToken } from "./middleware/auth";
+import { isPublicReadOnly, requireApiToken } from "./middleware/auth";
 import monitorsRoute from "./routes/monitors";
 import incidentsRoute from "./routes/incidents";
 import { runSweep } from "./scheduled";
@@ -11,6 +11,10 @@ export { MonitorState } from "./durable-objects/MonitorState";
 const app = new Hono<{ Bindings: Env }>();
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+// Lets the dashboard decide whether to show the token gate or a read-only
+// view before it has a token to authenticate with.
+app.get("/api/config", (c) => c.json({ publicReadOnly: isPublicReadOnly(c.env) }));
 
 app.use("/api/*", requireApiToken);
 
