@@ -21,6 +21,19 @@ app.use("/api/*", requireApiToken);
 app.route("/api/monitors", monitorsRoute);
 app.route("/api/incidents", incidentsRoute);
 
+/**
+ * Runs the health-check sweep on demand, doing exactly what the cron trigger
+ * does. Token-gated, since it makes the Worker issue outbound requests.
+ *
+ * Exists because a newly-deployed Cron Trigger takes up to 15 minutes to
+ * propagate across Cloudflare's network, and because a monitoring tool whose
+ * only execution path is "wait up to a minute" is painful to demo or debug.
+ */
+app.post("/api/sweep", async (c) => {
+  await runSweep(c.env);
+  return c.json({ ok: true, sweptAt: new Date().toISOString() });
+});
+
 app.onError((err, c) => {
   console.error("Unhandled error", err);
   return c.json({ error: "Internal server error." }, 500);
