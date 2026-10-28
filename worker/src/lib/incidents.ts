@@ -1,6 +1,7 @@
 import type { CheckRecord, CheckResult, Incident, Monitor } from "../types";
 import type { StateMachineAction } from "../durable-objects/state-machine";
 import { summarizeOpenedIncident, summarizeResolvedIncident } from "../ai/summarize";
+import { findSimilarIncidents, indexIncident } from "../ai/similar";
 
 /**
  * Persist the durable consequences of a state-machine decision. Runs in the
@@ -54,19 +55,29 @@ async function openIncident(
     .run();
 
   const checks = await recentChecks(env, monitor.id);
+
+  // Retrieve similar past incidents first so the generated note can cite the
+  // pattern ("same 500s as the Dec 2 incident") rather than describing this
+  // failure in isolation.
+  const similar = await findSimilarIncidents(env, monitor, severity, checks);
+
   const summary = await summarizeOpenedIncident(
     env,
     monitor,
     { severity, started_at: result.checkedAt },
     checks,
-    []
+    similar
   );
 
   await env.DB.prepare(
-    `UPDATE incidents SET summary = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`
+    `UPDATE incidents
+     SET summary = ?, similar_incident_ids = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = ?`
   )
-    .bind(summary, incidentId)
+    .bind(summary, JSON.stringify(similar.map((s) => s.id)), incidentId)
     .run();
+
+  await indexIncident(env, incidentId, monitor, severity, result.checkedAt, summary, checks);
 }
 
 async function resolveIncident(

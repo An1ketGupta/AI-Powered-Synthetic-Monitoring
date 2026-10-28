@@ -56,6 +56,10 @@ max_retries = 3
 binding = "AI"
 
 # --- Vectorize: semantic search over past incidents -------------------------
+# Create with:
+#   wrangler vectorize create edgewatch-incidents --dimensions=768 --metric=cosine
+#   wrangler vectorize create-metadata-index edgewatch-incidents --property-name=monitorId --type=string
+# 768 dimensions matches @cf/baai/bge-base-en-v1.5 (see src/ai/models.ts).
 [[vectorize]]
 binding = "INCIDENTS_INDEX"
 index_name = "edgewatch-incidents"
