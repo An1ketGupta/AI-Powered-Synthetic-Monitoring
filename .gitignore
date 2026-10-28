@@ -2,6 +2,7 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+.api-token.tmp
 *.log
 .DS_Store
 .env
