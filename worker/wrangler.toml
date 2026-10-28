@@ -1,0 +1,61 @@
+name = "edgewatch"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# --- Non-secret configuration ---------------------------------------------
+[vars]
+DEFAULT_CHECK_INTERVAL_SECONDS = "60"
+DEFAULT_TIMEOUT_MS = "10000"
+CONSECUTIVE_FAILURES_FOR_INCIDENT = "2"
+SIMILAR_INCIDENTS_TOP_K = "3"
+
+# --- Static assets (React dashboard build) ---------------------------------
+[assets]
+directory = "../dashboard/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# --- D1: monitors, checks, incidents ---------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "edgewatch-db"
+database_id = "REPLACE_AFTER_WRANGLER_D1_CREATE"
+
+# --- KV: hot cache of active monitor configs for the cron sweep ------------
+[[kv_namespaces]]
+binding = "CONFIG_CACHE"
+id = "REPLACE_AFTER_WRANGLER_KV_CREATE"
+
+# --- Durable Objects: one MonitorState instance per monitored target -------
+[[durable_objects.bindings]]
+name = "MONITOR_STATE"
+class_name = "MonitorState"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MonitorState"]
+
+# --- Queues: fan-out for incident alerts ------------------------------------
+[[queues.producers]]
+binding = "ALERT_QUEUE"
+queue = "edgewatch-alerts"
+
+[[queues.consumers]]
+queue = "edgewatch-alerts"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+
+# --- Workers AI: incident summarization + embeddings ------------------------
+[ai]
+binding = "AI"
+
+# --- Vectorize: semantic search over past incidents -------------------------
+[[vectorize]]
+binding = "INCIDENTS_INDEX"
+index_name = "edgewatch-incidents"
+
+# --- Cron Triggers: the edge health-check sweep -----------------------------
+[triggers]
+crons = ["*/1 * * * *"]
