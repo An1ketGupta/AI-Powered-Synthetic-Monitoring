@@ -22,7 +22,11 @@ export function IncidentCard({ incident, showMonitor }: { incident: Incident; sh
 
       {incident.summary && (
         <div className="ai-note">
-          <span className="label">AI incident note</span>
+          <span className="label">
+            {incident.summary_is_fallback
+              ? "Automated note — Workers AI unavailable"
+              : "AI incident note"}
+          </span>
           {incident.summary}
         </div>
       )}

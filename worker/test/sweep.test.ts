@@ -52,6 +52,7 @@ describe("runSweep", () => {
     expect(incident.status).toBe("open");
     expect(incident.severity).toBe("down");
     expect(incident.summary).toBe("Generated incident note.");
+    expect(incident.summary_is_fallback).toBe(0);
 
     expect(state.queued).toHaveLength(1);
     expect(state.queued[0]).toMatchObject({ kind: "incident_opened", severity: "down" });
@@ -81,6 +82,32 @@ describe("runSweep", () => {
     const incident = [...state.incidents.values()][0];
     expect(incident.summary).toContain("Example API");
     expect(incident.summary).not.toBe("Generated incident note.");
+  });
+
+  it("flags a fallback note so a degraded deployment is distinguishable", async () => {
+    stubFetch(() => ({ status: 503 }));
+    const { env, state } = createFakeEnv([makeMonitor()], { aiFails: true });
+
+    await runSweep(env);
+    state.doStates.set("m1", { ...state.doStates.get("m1")!, lastCheckedAt: null });
+    await runSweep(env);
+
+    const incident = [...state.incidents.values()][0];
+    expect(incident.summary_is_fallback).toBe(1);
+  });
+
+  it("does not index a fallback note into Vectorize", async () => {
+    // Fallback notes are a fixed template, so indexing them would cluster
+    // unrelated incidents together purely because the boilerplate matches.
+    stubFetch(() => ({ status: 503 }));
+    const { env, state } = createFakeEnv([makeMonitor()], { aiFails: true });
+
+    await runSweep(env);
+    state.doStates.set("m1", { ...state.doStates.get("m1")!, lastCheckedAt: null });
+    await runSweep(env);
+
+    expect(state.incidents.size).toBe(1);
+    expect(state.vectors.size).toBe(0);
   });
 
   it("resolves the incident and queues a recovery alert once the monitor is healthy again", async () => {

@@ -72,13 +72,19 @@ async function openIncident(
 
   await env.DB.prepare(
     `UPDATE incidents
-     SET summary = ?, similar_incident_ids = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     SET summary = ?, summary_is_fallback = ?, similar_incident_ids = ?,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      WHERE id = ?`
   )
-    .bind(summary, JSON.stringify(similar.map((s) => s.id)), incidentId)
+    .bind(summary.text, summary.isFallback ? 1 : 0, JSON.stringify(similar.map((s) => s.id)), incidentId)
     .run();
 
-  await indexIncident(env, incidentId, monitor, severity, result.checkedAt, summary, checks);
+  // Only index notes the model actually wrote. A fallback note is a fixed
+  // template, so indexing it would cluster unrelated incidents together purely
+  // because their boilerplate matches.
+  if (!summary.isFallback) {
+    await indexIncident(env, incidentId, monitor, severity, result.checkedAt, summary.text, checks);
+  }
 
   await enqueueAlert(env, {
     kind: "incident_opened",
@@ -87,7 +93,7 @@ async function openIncident(
     monitorName: monitor.name,
     monitorUrl: monitor.url,
     severity,
-    summary,
+    summary: summary.text,
     occurredAt: result.checkedAt,
   });
 }
@@ -117,7 +123,7 @@ async function resolveIncident(
   await env.DB.prepare(
     `UPDATE incidents SET resolution_summary = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`
   )
-    .bind(resolutionSummary, incidentId)
+    .bind(resolutionSummary.text, incidentId)
     .run();
 
   await enqueueAlert(env, {
@@ -127,7 +133,7 @@ async function resolveIncident(
     monitorName: monitor.name,
     monitorUrl: monitor.url,
     severity: incident.severity,
-    summary: resolutionSummary,
+    summary: resolutionSummary.text,
     occurredAt: result.checkedAt,
   });
 }

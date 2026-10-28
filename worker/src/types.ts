@@ -32,6 +32,8 @@ export interface Incident {
   started_at: string;
   resolved_at: string | null;
   summary: string | null;
+  /** 1 when `summary` came from the deterministic fallback, not Workers AI. */
+  summary_is_fallback: number;
   resolution_summary: string | null;
   similar_incident_ids: string | null;
   created_at: string;

@@ -39,6 +39,7 @@ export interface Incident {
   started_at: string;
   resolved_at: string | null;
   summary: string | null;
+  summary_is_fallback: number;
   resolution_summary: string | null;
   similar_incident_ids: string | null;
   monitor_name?: string;

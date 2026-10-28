@@ -150,6 +150,7 @@ function applyWrite(state: FakeEnvState, sql: string, args: unknown[]) {
       started_at: args[3],
       resolved_at: null,
       summary: null,
+      summary_is_fallback: 0,
       resolution_summary: null,
       similar_incident_ids: null,
     });
@@ -163,7 +164,8 @@ function applyWrite(state: FakeEnvState, sql: string, args: unknown[]) {
 
     if (sql.includes("SET summary")) {
       incident.summary = args[0];
-      incident.similar_incident_ids = args[1];
+      incident.summary_is_fallback = args[1];
+      incident.similar_incident_ids = args[2];
     } else if (sql.includes("SET resolution_summary")) {
       incident.resolution_summary = args[0];
     } else if (sql.includes("SET status = 'resolved'")) {

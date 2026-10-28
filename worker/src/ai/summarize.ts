@@ -6,6 +6,16 @@ interface TextGenerationResult {
   response?: string;
 }
 
+/**
+ * A generated note, plus whether it actually came from the model. Callers
+ * persist `isFallback` so a degraded deployment is visible instead of looking
+ * identical to a healthy one.
+ */
+export interface GeneratedNote {
+  text: string;
+  isFallback: boolean;
+}
+
 async function generate(env: Env, prompt: { system: string; user: string }): Promise<string> {
   const result = (await env.AI.run(SUMMARY_MODEL, {
     messages: [
@@ -31,14 +41,15 @@ export async function summarizeOpenedIncident(
   incident: Pick<Incident, "severity" | "started_at">,
   checks: CheckRecord[],
   similar: SimilarIncidentContext[]
-): Promise<string> {
+): Promise<GeneratedNote> {
   try {
     const summary = await generate(env, buildOpenedPrompt(monitor, incident, checks, similar));
-    if (summary) return summary;
+    if (summary) return { text: summary, isFallback: false };
+    console.error("Workers AI returned an empty incident summary", { model: SUMMARY_MODEL });
   } catch (err) {
-    console.error("Workers AI incident summarization failed", err);
+    console.error("Workers AI incident summarization failed", { model: SUMMARY_MODEL, err });
   }
-  return fallbackOpenedSummary(monitor, incident, checks);
+  return { text: fallbackOpenedSummary(monitor, incident, checks), isFallback: true };
 }
 
 export async function summarizeResolvedIncident(
@@ -46,14 +57,15 @@ export async function summarizeResolvedIncident(
   monitor: Monitor,
   incident: Pick<Incident, "severity" | "started_at" | "resolved_at" | "summary">,
   checks: CheckRecord[]
-): Promise<string> {
+): Promise<GeneratedNote> {
   try {
     const summary = await generate(env, buildResolvedPrompt(monitor, incident, checks));
-    if (summary) return summary;
+    if (summary) return { text: summary, isFallback: false };
+    console.error("Workers AI returned an empty resolution summary", { model: SUMMARY_MODEL });
   } catch (err) {
-    console.error("Workers AI resolution summarization failed", err);
+    console.error("Workers AI resolution summarization failed", { model: SUMMARY_MODEL, err });
   }
-  return `${monitor.name} recovered at ${incident.resolved_at}.`;
+  return { text: `${monitor.name} recovered at ${incident.resolved_at}.`, isFallback: true };
 }
 
 export function fallbackOpenedSummary(
