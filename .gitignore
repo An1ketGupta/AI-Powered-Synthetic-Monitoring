@@ -11,3 +11,6 @@ dashboard/dist/
 worker/dist/
 *.tsbuildinfo
 .dry-run-out/
+
+# Local agent/editor state
+.claude/
