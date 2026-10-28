@@ -15,6 +15,10 @@ SIMILAR_INCIDENTS_TOP_K = "3"
 directory = "../dashboard/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+# This wrangler version only supports a boolean here (per-path glob patterns
+# are a wrangler v4 feature) -- the Worker runs first for every request and
+# explicitly proxies non-API paths to ASSETS itself (see src/index.ts).
+run_worker_first = true
 
 # --- D1: monitors, checks, incidents ---------------------------------------
 [[d1_databases]]
