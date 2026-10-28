@@ -2,6 +2,7 @@ import type { CheckRecord, CheckResult, Incident, Monitor } from "../types";
 import type { StateMachineAction } from "../durable-objects/state-machine";
 import { summarizeOpenedIncident, summarizeResolvedIncident } from "../ai/summarize";
 import { findSimilarIncidents, indexIncident } from "../ai/similar";
+import { enqueueAlert } from "../queue/alerts";
 
 /**
  * Persist the durable consequences of a state-machine decision. Runs in the
@@ -78,6 +79,17 @@ async function openIncident(
     .run();
 
   await indexIncident(env, incidentId, monitor, severity, result.checkedAt, summary, checks);
+
+  await enqueueAlert(env, {
+    kind: "incident_opened",
+    incidentId,
+    monitorId: monitor.id,
+    monitorName: monitor.name,
+    monitorUrl: monitor.url,
+    severity,
+    summary,
+    occurredAt: result.checkedAt,
+  });
 }
 
 async function resolveIncident(
@@ -107,6 +119,17 @@ async function resolveIncident(
   )
     .bind(resolutionSummary, incidentId)
     .run();
+
+  await enqueueAlert(env, {
+    kind: "incident_resolved",
+    incidentId,
+    monitorId: monitor.id,
+    monitorName: monitor.name,
+    monitorUrl: monitor.url,
+    severity: incident.severity,
+    summary: resolutionSummary,
+    occurredAt: result.checkedAt,
+  });
 }
 
 /** Recent check history for a monitor, used as context for AI incident summaries. */
