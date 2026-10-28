@@ -2,6 +2,10 @@
  
 **AI-powered synthetic monitoring and incident intelligence, built entirely on Cloudflare's developer platform.**
 
+**Live demo: [edgewatch.guptaaniket600-ag.workers.dev](https://edgewatch.guptaaniket600-ag.workers.dev)** — read-only, no sign-in.
+The monitors there are genuinely checked from Cloudflare's edge every minute, and the incident
+notes were written by Workers AI from real check history.
+
 EdgeWatch checks your URLs and APIs from Cloudflare's edge on a schedule, detects outages and
 latency degradation, and uses Workers AI to write a human-readable incident note — cross-referenced
 against similar past incidents — instead of just flipping a status dot red.
@@ -164,12 +168,14 @@ npx wrangler d1 create edgewatch-db
 
 # 3. Apply the schema to the remote database
 npm run db:migrate:remote --workspace=worker
+npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0002_summary_source.sql
 
 # 4. KV namespace  -> copy id into wrangler.toml
 npx wrangler kv namespace create CONFIG_CACHE
 
-# 5. Queue
-npx wrangler queues create edgewatch-alerts
+# 5. Queue. The explicit retention is required: wrangler defaults to 345600s,
+#    which the Workers Free plan rejects as "queue settings are invalid".
+npx wrangler queues create edgewatch-alerts --message-retention-period-secs 86400
 
 # 6. Vectorize index (768 dims matches the bge-base-en-v1.5 embedding model)
 npx wrangler vectorize create edgewatch-incidents --dimensions=768 --metric=cosine
@@ -212,6 +218,14 @@ caller-supplied URL, so an unauthenticated write path would be an open request p
   days). That only affects undelivered alerts, not incident history, which lives in D1.
 - The cron trigger runs every minute; per-monitor intervals are enforced in the sweep, so a monitor
   set to 300s is checked every five ticks rather than every tick.
+- **A newly-deployed Cron Trigger takes up to 15 minutes to propagate** across Cloudflare's
+  network. Until it does, monitors sit at "never checked" and a correct deployment is
+  indistinguishable from a broken one. Use `POST /api/sweep` to run a cycle immediately instead of
+  guessing.
+- **Check the model id against `wrangler ai models` if you change it.** `env.AI.run()` throws on an
+  unknown id, which the summarizer catches and degrades from, so a typo surfaces only as "every
+  note is a fallback" — see `summary_is_fallback` on the incidents table and the note label in the
+  dashboard.
 
 ---
 
@@ -230,6 +244,7 @@ unless `PUBLIC_READ_ONLY` is enabled (see [Public demo mode](#public-demo-mode))
 | `PUT` | `/api/monitors/:id` | Update a monitor (including `is_active` to pause) |
 | `DELETE` | `/api/monitors/:id` | Delete a monitor and reset its Durable Object |
 | `GET` | `/api/incidents?status=open\|resolved` | Incident feed with AI notes |
+| `POST` | `/api/sweep` | Run a health-check cycle immediately (what cron does) |
 
 ```bash
 curl -X POST https://<your-worker>/api/monitors \
