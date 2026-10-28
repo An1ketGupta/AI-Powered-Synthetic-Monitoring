@@ -191,8 +191,12 @@ on the next tick.
 
 ### Notes
 
-- **Workers AI and Vectorize require a paid Workers plan.** Everything else fits comfortably in the
-  free tier at this scale.
+- **Every service used here runs on the Workers Free plan.** The relevant daily/monthly free
+  allowances are Workers 100k requests/day, Workers AI 10k Neurons/day, Vectorize 30M queried +
+  5M stored vector dimensions/month, Queues 10k operations/day, Durable Objects 100k requests/day,
+  and D1 5GB storage. A handful of monitors on a one-minute interval sits far inside all of these.
+- On the Free plan, Queue message retention is fixed at 24 hours (the Paid plan allows up to 14
+  days). That only affects undelivered alerts, not incident history, which lives in D1.
 - The cron trigger runs every minute; per-monitor intervals are enforced in the sweep, so a monitor
   set to 300s is checked every five ticks rather than every tick.
 
