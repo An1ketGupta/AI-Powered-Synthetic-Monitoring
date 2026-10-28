@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { requireApiToken } from "./middleware/auth";
 import monitorsRoute from "./routes/monitors";
 import incidentsRoute from "./routes/incidents";
+import { runSweep } from "./scheduled";
 
 export { MonitorState } from "./durable-objects/MonitorState";
 
@@ -26,4 +27,5 @@ app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default {
   fetch: app.fetch,
+  scheduled: (_controller, env, ctx) => ctx.waitUntil(runSweep(env)),
 } satisfies ExportedHandler<Env>;
