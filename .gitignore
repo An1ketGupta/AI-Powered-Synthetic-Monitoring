@@ -8,3 +8,5 @@ dist/
 coverage/
 dashboard/dist/
 worker/dist/
+*.tsbuildinfo
+.dry-run-out/
