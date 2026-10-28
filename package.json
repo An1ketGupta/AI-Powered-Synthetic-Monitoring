@@ -1,0 +1,17 @@
+{
+  "name": "edgewatch",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-powered synthetic monitoring and incident intelligence, built entirely on Cloudflare's edge platform.",
+  "workspaces": [
+    "worker",
+    "dashboard"
+  ],
+  "scripts": {
+    "dev:worker": "npm run dev --workspace=worker",
+    "dev:dashboard": "npm run dev --workspace=dashboard",
+    "test": "npm run test --workspace=worker",
+    "build:dashboard": "npm run build --workspace=dashboard",
+    "deploy": "npm run build:dashboard && npm run deploy --workspace=worker"
+  }
+}
