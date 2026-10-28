@@ -1,5 +1,5 @@
 # EdgeWatch
-
+ 
 **AI-powered synthetic monitoring and incident intelligence, built entirely on Cloudflare's developer platform.**
 
 EdgeWatch checks your URLs and APIs from Cloudflare's edge on a schedule, detects outages and
