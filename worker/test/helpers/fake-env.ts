@@ -15,6 +15,7 @@ export interface FakeEnvState {
   incidents: Map<string, Record<string, unknown>>;
   checks: Array<Record<string, unknown>>;
   queued: unknown[];
+  failedAlerts: Map<string, Record<string, unknown>>;
   vectors: Map<string, unknown>;
   doStates: Map<string, MonitorRuntimeState>;
   aiCalls: Array<{ model: string; input: unknown }>;
@@ -42,6 +43,7 @@ export function createFakeEnv(monitors: Monitor[], options: { aiFails?: boolean 
     incidents: new Map(),
     checks: [],
     queued: [],
+    failedAlerts: new Map(),
     vectors: new Map(),
     doStates: new Map(),
     aiCalls: [],
@@ -137,6 +139,13 @@ function applyWrite(state: FakeEnvState, sql: string, args: unknown[]): number {
     return doomed.size;
   }
 
+  if (sql.includes("INSERT OR IGNORE INTO failed_alerts")) {
+    const [id, incidentId, kind, payload] = args as string[];
+    if (state.failedAlerts.has(id)) return 0;
+    state.failedAlerts.set(id, { id, incident_id: incidentId, kind, payload });
+    return 1;
+  }
+
   if (sql.includes("INSERT INTO checks")) {
     state.checks.unshift({
       id: state.checks.length + 1,
@@ -198,6 +207,7 @@ function readFirst(state: FakeEnvState, sql: string, args: unknown[]) {
 function readAll(state: FakeEnvState, sql: string, args: unknown[]) {
   if (sql.includes("FROM monitors")) return state.monitors.filter((m) => m.is_active === 1);
   if (sql.includes("FROM checks")) return state.checks.filter((c) => c.monitor_id === args[0]);
+  if (sql.includes("FROM failed_alerts")) return [...state.failedAlerts.values()];
   return [];
 }
 

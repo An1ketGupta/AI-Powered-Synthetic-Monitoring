@@ -63,6 +63,19 @@ queue = "edgewatch-alerts"
 max_batch_size = 10
 max_batch_timeout = 5
 max_retries = 3
+# After max_retries, a message moves here instead of being dropped. Must
+# match ALERT_DEAD_LETTER_QUEUE in src/queue/alerts.ts. Create with:
+#   wrangler queues create edgewatch-alerts-dlq --message-retention-period-secs 86400
+dead_letter_queue = "edgewatch-alerts-dlq"
+
+# The same Worker consumes the DLQ and copies each message into the
+# failed_alerts D1 table, since Free-plan retention would otherwise drop it
+# after 24 hours.
+[[queues.consumers]]
+queue = "edgewatch-alerts-dlq"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
 
 # --- Workers AI: incident summarization + embeddings ------------------------
 [ai]
