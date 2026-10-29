@@ -13,6 +13,7 @@ const EMPTY_FORM: NewMonitorInput = {
   expected_status: 200,
   interval_seconds: 60,
   timeout_ms: 10000,
+  region_quorum: 3,
 };
 
 export function MonitorsPage() {
@@ -59,8 +60,8 @@ export function MonitorsPage() {
     <>
       <h1>Monitors</h1>
       <p className="muted">
-        Checked from Cloudflare's edge every minute. Incidents open after two
-        consecutive failures.
+        Checked from four Cloudflare regions every minute. Incidents open after
+        two consecutive checks fail in enough regions.
       </p>
 
       {error && <div className="error">{error}</div>}
@@ -145,6 +146,22 @@ export function MonitorsPage() {
                     setForm({ ...form, timeout_ms: Number(e.target.value) })
                   }
                 />
+              </div>
+              <div>
+                <label htmlFor="quorum">Regions that must fail</label>
+                <select
+                  id="quorum"
+                  value={form.region_quorum}
+                  onChange={(e) =>
+                    setForm({ ...form, region_quorum: Number(e.target.value) })
+                  }
+                >
+                  {[1, 2, 3, 4].map((n) => (
+                    <option key={n} value={n}>
+                      {n} of 4
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <button className="primary" type="submit" disabled={submitting}>

@@ -8,6 +8,7 @@ import { handleQueueBatch } from "./queue/alerts";
 import type { AlertMessage } from "./types";
 
 export { MonitorState } from "./durable-objects/MonitorState";
+export { RegionProbe } from "./durable-objects/RegionProbe";
 
 const app = new Hono<{ Bindings: Env }>();
 

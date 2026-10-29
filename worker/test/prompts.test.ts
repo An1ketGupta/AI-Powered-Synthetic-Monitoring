@@ -10,6 +10,7 @@ const monitor: Monitor = {
   expected_status: 200,
   interval_seconds: 60,
   timeout_ms: 10000,
+  region_quorum: 3,
   is_active: 1,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
@@ -23,6 +24,7 @@ const check = (overrides: Partial<CheckRecord> = {}): CheckRecord => ({
   latency_ms: 120,
   error: "Expected HTTP 200, got 500.",
   checked_at: "2026-01-01T12:00:00.000Z",
+  regions: null,
   ...overrides,
 });
 

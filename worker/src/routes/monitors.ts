@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { CheckRecord, Incident, Monitor } from "../types";
+import type { CheckRecord, Incident, Monitor, RegionCheck } from "../types";
 import { ValidationError, parseCreateMonitorInput } from "../lib/validation";
 import { invalidateActiveMonitorsCache } from "../lib/config-cache";
 import type { MonitorRuntimeState } from "../durable-objects/state-machine";
@@ -34,10 +34,19 @@ monitors.post("/", async (c) => {
 
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
-    `INSERT INTO monitors (id, name, url, method, expected_status, interval_seconds, timeout_ms)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO monitors (id, name, url, method, expected_status, interval_seconds, timeout_ms, region_quorum)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(id, input.name, input.url, input.method, input.expected_status, input.interval_seconds, input.timeout_ms)
+    .bind(
+      id,
+      input.name,
+      input.url,
+      input.method,
+      input.expected_status,
+      input.interval_seconds,
+      input.timeout_ms,
+      input.region_quorum
+    )
     .run();
 
   await invalidateActiveMonitorsCache(c.env);
@@ -62,7 +71,7 @@ monitors.get("/:id", async (c) => {
     stubFor(c.env, id).getState(),
   ]);
 
-  return c.json({ ...monitor, live, checks, incidents });
+  return c.json({ ...monitor, live, checks: checks.map(withParsedRegions), incidents });
 });
 
 monitors.put("/:id", async (c) => {
@@ -90,10 +99,20 @@ monitors.put("/:id", async (c) => {
   await c.env.DB.prepare(
     `UPDATE monitors
      SET name = ?, url = ?, method = ?, expected_status = ?, interval_seconds = ?, timeout_ms = ?,
-         is_active = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         region_quorum = ?, is_active = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      WHERE id = ?`
   )
-    .bind(input.name, input.url, input.method, input.expected_status, input.interval_seconds, input.timeout_ms, isActive, id)
+    .bind(
+      input.name,
+      input.url,
+      input.method,
+      input.expected_status,
+      input.interval_seconds,
+      input.timeout_ms,
+      input.region_quorum,
+      isActive,
+      id
+    )
     .run();
 
   await invalidateActiveMonitorsCache(c.env);
@@ -113,5 +132,10 @@ monitors.delete("/:id", async (c) => {
 
   return c.body(null, 204);
 });
+
+/** `regions` is stored as JSON text; hand the dashboard an array instead. */
+function withParsedRegions(check: CheckRecord): Omit<CheckRecord, "regions"> & { regions: RegionCheck[] | null } {
+  return { ...check, regions: check.regions ? (JSON.parse(check.regions) as RegionCheck[]) : null };
+}
 
 export default monitors;

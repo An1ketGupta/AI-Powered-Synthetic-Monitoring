@@ -18,8 +18,12 @@ against similar past incidents — instead of just flipping a status dot red.
 
 ## What it does
 
-- **Edge health checks** — every monitor is checked on a cron trigger from Cloudflare's network,
-  with a configurable interval, expected status code, and timeout.
+- **Multi-region edge checks** — every monitor is checked from four regions at once (Western and
+  Eastern North America, Western Europe, Asia-Pacific), each one a Durable Object pinned with a
+  `locationHint`. The check counts as failed only when a per-monitor quorum of regions agree
+  (default 3 of 4). A failure seen from fewer regions is recorded as a *regional issue*, with the
+  region and Cloudflare data center (colo) named, and never opens an incident.
+- **Configurable checks** — interval, expected status code, and timeout per monitor.
 - **Three-state detection** — `up` / `degraded` / `down`. A response that is *correct but slow*
   (over 50% of the configured timeout) is reported as `degraded`, so an endpoint drifting toward
   failure surfaces before it actually fails.
@@ -49,8 +53,10 @@ against similar past incidents — instead of just flipping a status dot red.
 flowchart TB
     Cron["Cron Trigger<br/>(every minute)"] --> Sweep["Worker: health-check sweep"]
     KV[("KV<br/>active-monitor cache")] -.->|config| Sweep
-    Sweep -->|"fetch()"| Targets["Monitored URLs / APIs"]
-    Sweep -->|check result| DO["Durable Object: MonitorState<br/>one per monitor<br/>(status state machine)"]
+    Sweep -->|"check(monitor)"| Probes["Durable Objects: RegionProbe x4<br/>wnam · enam · weur · apac<br/>(locationHint)"]
+    Probes -->|"fetch()"| Targets["Monitored URLs / APIs"]
+    Probes -->|"per-region results"| Sweep
+    Sweep -->|"quorum result"| DO["Durable Object: MonitorState<br/>one per monitor<br/>(status state machine)"]
     DO -->|"open / escalate / resolve"| Sweep
 
     Sweep -->|check + incident rows| D1[("D1<br/>monitors, checks, incidents")]
@@ -74,7 +80,7 @@ flowchart TB
 |---|---|
 | **Workers** | HTTP API, static-asset serving, cron handler, queue consumer |
 | **Cron Triggers** | Drives the once-a-minute health-check sweep and the daily retention job |
-| **Durable Objects** | One instance per monitor; owns the status state machine with strong consistency |
+| **Durable Objects** | `MonitorState`: one per monitor, owns the status state machine with strong consistency. `RegionProbe`: one per region, placed with `locationHint`, runs the checks |
 | **D1** | Monitors, check history, incident log |
 | **KV** | Hot cache of active-monitor configs for the sweep |
 | **Queues** | Decouples alert delivery from the check path; owns retries and dead-lettering |
@@ -83,6 +89,20 @@ flowchart TB
 | **Workers Assets** | Serves the React dashboard from the same Worker |
 
 ### Design decisions worth calling out
+
+**Why check from several regions?** From one vantage point, "the origin is down" and "the path
+from this one data center to the origin is broken" look identical, and the second one causes most
+false alarms in uptime monitoring. Asking four regions and requiring a quorum tells them apart: a
+real outage fails everywhere, a routing or regional CDN problem fails in one place. The quorum
+logic is a pure function (`aggregateRegionalResults`), so every rule is unit-tested. A probe that
+fails to respond is left out rather than counted as a failure (an EdgeWatch infrastructure problem
+is not the customer's outage), and the quorum shrinks to the regions that did report, so lost
+probes can't hide a real outage either.
+
+**Why one probe per region, shared by all monitors?** A probe holds no state, so one per region is
+enough, and four long-lived objects are cheaper than four per monitor. `locationHint` is
+best-effort and only applies when an object is first created, so each result records the colo it
+actually ran in, rather than trusting the hint.
 
 **Why a Durable Object per monitor?** Deciding "has this monitor failed enough times to be an
 incident?" is a read-modify-write on shared state. Done in D1 from a concurrent sweep, two
@@ -115,15 +135,17 @@ worker/                      Cloudflare Worker (API, cron, queue consumer, DO)
     scheduled.ts             The health-check sweep
     durable-objects/
       MonitorState.ts        Durable Object (storage wrapper)
+      RegionProbe.ts         Durable Object: one check vantage point per region
       state-machine.ts       Pure status-transition logic
     ai/
       summarize.ts           Workers AI incident/resolution notes
       similar.ts             Vectorize embedding + similarity search
       prompts.ts             Prompt construction
-    lib/                     Check execution, incident persistence, retention, validation, KV cache
+    lib/                     Check execution, multi-region quorum, incident persistence, retention,
+                             validation, KV cache
     routes/                  /api/monitors, /api/incidents
   migrations/                D1 schema (0001) and incremental migrations
-  test/                      Vitest suite (53 tests)
+  test/                      Vitest suite (69 tests)
 dashboard/                   React + Vite SPA
 ```
 
@@ -155,7 +177,7 @@ For dashboard development with hot reload, run `npm run dev:dashboard` alongside
 > binding fakes instead, so `npm test` needs no account.
 
 ```bash
-npm test                              # 53 tests, no Cloudflare account needed
+npm test                              # 69 tests, no Cloudflare account needed
 npm run typecheck --workspace=worker
 ```
 
@@ -178,6 +200,7 @@ npm run db:migrate:remote --workspace=worker
 npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0002_summary_source.sql
 npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0003_checks_retention.sql
 npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0004_failed_alerts.sql
+npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0005_multi_region.sql
 
 # 4. KV namespace  -> copy id into wrangler.toml
 npx wrangler kv namespace create CONFIG_CACHE
@@ -220,6 +243,12 @@ caller-supplied URL, so an unauthenticated write path would be an open request p
 
 ### Notes
 
+- **Multi-region checks cost 4× the Durable Object requests.** Each check is four `RegionProbe`
+  calls plus the `MonitorState` calls, roughly 6 DO requests per monitor per minute, or ~8,600 a
+  day. Against the Free plan's 100k/day that leaves room for about 10 monitors on a one-minute
+  interval. Longer intervals scale this down proportionally.
+- **Regions look identical under `wrangler dev`.** All four probes run on your machine, so every
+  region reports the same colo locally. Distinct colos only appear on a deployed Worker.
 - **Every service used here runs on the Workers Free plan.** The relevant daily/monthly free
   allowances are Workers 100k requests/day, Workers AI 10k Neurons/day, Vectorize 30M queried +
   5M stored vector dimensions/month, Queues 10k operations/day, Durable Objects 100k requests/day,

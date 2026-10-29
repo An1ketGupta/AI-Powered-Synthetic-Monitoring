@@ -161,6 +161,35 @@ h2 {
   background: currentColor;
 }
 
+/* --- per-region check result --- */
+.region-dots {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.region-dot {
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  cursor: help;
+}
+
+.region-dot.up {
+  color: var(--up);
+  background: var(--up-bg);
+}
+
+.region-dot.degraded {
+  color: var(--degraded);
+  background: var(--degraded-bg);
+}
+
+.region-dot.down {
+  color: var(--down);
+  background: var(--down-bg);
+}
+
 .pill.up {
   color: var(--up);
   background: var(--up-bg);

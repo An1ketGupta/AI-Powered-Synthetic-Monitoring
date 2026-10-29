@@ -150,9 +150,17 @@ export async function recentChecks(env: Env, monitorId: string, limit = 12): Pro
 
 export async function recordCheck(env: Env, monitorId: string, result: CheckResult): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO checks (monitor_id, status, http_status, latency_ms, error, checked_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO checks (monitor_id, status, http_status, latency_ms, error, checked_at, regions)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(monitorId, result.status, result.httpStatus, result.latencyMs, result.error, result.checkedAt)
+    .bind(
+      monitorId,
+      result.status,
+      result.httpStatus,
+      result.latencyMs,
+      result.error,
+      result.checkedAt,
+      result.regions ? JSON.stringify(result.regions) : null
+    )
     .run();
 }

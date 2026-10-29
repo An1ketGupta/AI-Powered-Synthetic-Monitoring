@@ -1,5 +1,6 @@
 import { vi } from "vitest";
-import type { Monitor } from "../../src/types";
+import type { Monitor, ProbeResult } from "../../src/types";
+import { runCheck } from "../../src/lib/check";
 import { INITIAL_STATE, applyCheckResult, type MonitorRuntimeState } from "../../src/durable-objects/state-machine";
 
 /**
@@ -30,6 +31,7 @@ export function makeMonitor(overrides: Partial<Monitor> = {}): Monitor {
     expected_status: 200,
     interval_seconds: 60,
     timeout_ms: 10000,
+    region_quorum: 3,
     is_active: 1,
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
@@ -37,7 +39,19 @@ export function makeMonitor(overrides: Partial<Monitor> = {}): Monitor {
   };
 }
 
-export function createFakeEnv(monitors: Monitor[], options: { aiFails?: boolean } = {}) {
+export interface FakeEnvOptions {
+  aiFails?: boolean;
+  /**
+   * Per-region overrides merged onto a probe's real result. The stubbed
+   * global fetch can't tell which region is asking, so this is how a test
+   * makes one region see something different from the others.
+   */
+  probeOverrides?: Record<string, Partial<ProbeResult>>;
+  /** Regions whose probe Durable Object itself throws instead of checking. */
+  unreachableProbes?: string[];
+}
+
+export function createFakeEnv(monitors: Monitor[], options: FakeEnvOptions = {}) {
   const state: FakeEnvState = {
     monitors,
     incidents: new Map(),
@@ -101,6 +115,16 @@ export function createFakeEnv(monitors: Monitor[], options: { aiFails?: boolean 
         },
       }),
     },
+    REGION_PROBE: {
+      idFromName: (name: string) => name,
+      get: (region: string) => ({
+        async check(monitor: Monitor): Promise<ProbeResult> {
+          if (options.unreachableProbes?.includes(region)) throw new Error(`probe ${region} unreachable`);
+          const result = await runCheck(monitor);
+          return { ...result, region, colo: "TST", ...options.probeOverrides?.[region] };
+        },
+      }),
+    },
     AI: {
       async run(model: string, input: unknown) {
         state.aiCalls.push({ model, input });
@@ -155,6 +179,7 @@ function applyWrite(state: FakeEnvState, sql: string, args: unknown[]): number {
       latency_ms: args[3],
       error: args[4],
       checked_at: args[5],
+      regions: args[6],
     });
     return 1;
   }

@@ -10,6 +10,7 @@ interface Env {
 	CHECK_RETENTION_DAYS: "30";
 	API_TOKEN: string;
 	MONITOR_STATE: DurableObjectNamespace<import("./src/index").MonitorState>;
+	REGION_PROBE: DurableObjectNamespace<import("./src/index").RegionProbe>;
 	DB: D1Database;
 	ALERT_QUEUE: Queue;
 	INCIDENTS_INDEX: VectorizeIndex;

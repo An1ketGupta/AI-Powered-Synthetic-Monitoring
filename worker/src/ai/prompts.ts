@@ -12,7 +12,9 @@ Write 2-4 short sentences in plain prose. No markdown, no headings, no bullet po
 State what failed, the observable pattern (status codes, latency, duration), and the most
 likely cause. Be explicit that a cause is a hypothesis -- you only have black-box HTTP
 check data, so never claim to know the root cause for certain. If prior similar incidents
-are provided, mention the pattern briefly. Do not invent details you were not given.`;
+are provided, mention the pattern briefly. Each check runs from several regions; when the
+detail says the failure is limited to some regions, say so, since that points at a regional
+network or CDN path rather than the origin itself. Do not invent details you were not given.`;
 
 function describeChecks(checks: CheckRecord[]): string {
   if (checks.length === 0) return "No check history available.";

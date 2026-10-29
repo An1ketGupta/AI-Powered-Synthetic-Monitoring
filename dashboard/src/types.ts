@@ -16,6 +16,7 @@ export interface Monitor {
   expected_status: number;
   interval_seconds: number;
   timeout_ms: number;
+  region_quorum: number;
   is_active: number;
   created_at: string;
   live: LiveState;
@@ -29,6 +30,17 @@ export interface Check {
   latency_ms: number | null;
   error: string | null;
   checked_at: string;
+  /** Null for checks recorded before multi-region probing. */
+  regions: RegionCheck[] | null;
+}
+
+export interface RegionCheck {
+  region: string;
+  colo: string | null;
+  status: MonitorStatus;
+  httpStatus: number | null;
+  latencyMs: number | null;
+  error: string | null;
 }
 
 export interface Incident {
@@ -58,4 +70,5 @@ export interface NewMonitorInput {
   expected_status: number;
   interval_seconds: number;
   timeout_ms: number;
+  region_quorum: number;
 }

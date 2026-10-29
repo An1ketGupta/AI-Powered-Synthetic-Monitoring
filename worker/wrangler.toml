@@ -46,9 +46,21 @@ id = "de6ae0b50ec4489ebb5df63662543114"
 name = "MONITOR_STATE"
 class_name = "MonitorState"
 
+# --- Durable Objects: one RegionProbe per probe region ----------------------
+# Shared by all monitors. Each instance is created with a locationHint
+# (wnam, enam, weur, apac -- see src/lib/regions.ts) so every check runs from
+# four places and an incident needs a quorum of regions to agree.
+[[durable_objects.bindings]]
+name = "REGION_PROBE"
+class_name = "RegionProbe"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["MonitorState"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RegionProbe"]
 
 # --- Queues: fan-out for incident alerts ------------------------------------
 # Create with (the 86400s retention is the Workers Free plan maximum; the

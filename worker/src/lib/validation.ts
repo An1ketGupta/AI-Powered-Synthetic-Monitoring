@@ -1,3 +1,5 @@
+import { DEFAULT_REGION_QUORUM, PROBE_REGIONS } from "./regions";
+
 export class ValidationError extends Error {}
 
 export interface CreateMonitorInput {
@@ -7,6 +9,7 @@ export interface CreateMonitorInput {
   expected_status: number;
   interval_seconds: number;
   timeout_ms: number;
+  region_quorum: number;
 }
 
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST"]);
@@ -49,6 +52,7 @@ export function parseCreateMonitorInput(body: unknown): CreateMonitorInput {
 
   const intervalSeconds = clampInt(b.interval_seconds, 60, MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS);
   const timeoutMs = clampInt(b.timeout_ms, 10000, MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
+  const regionQuorum = clampInt(b.region_quorum, DEFAULT_REGION_QUORUM, 1, PROBE_REGIONS.length);
 
   return {
     name,
@@ -57,6 +61,7 @@ export function parseCreateMonitorInput(body: unknown): CreateMonitorInput {
     expected_status: expectedStatus,
     interval_seconds: intervalSeconds,
     timeout_ms: timeoutMs,
+    region_quorum: regionQuorum,
   };
 }
 

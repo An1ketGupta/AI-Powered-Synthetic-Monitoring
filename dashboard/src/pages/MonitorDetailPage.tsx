@@ -5,6 +5,7 @@ import type { MonitorDetail } from "../types";
 import { StatusPill } from "../components/StatusPill";
 import { LatencyStrip } from "../components/LatencyStrip";
 import { IncidentCard } from "../components/IncidentCard";
+import { RegionDots } from "../components/RegionDots";
 import { formatDateTime, formatRelative } from "../lib/format";
 import { useSession } from "../session";
 
@@ -89,8 +90,9 @@ export function MonitorDetailPage() {
           <LatencyStrip checks={monitor.checks} />
         </div>
         <p className="muted" style={{ marginBottom: 0 }}>
-          Every {monitor.interval_seconds}s · expects HTTP {monitor.expected_status} · {monitor.timeout_ms}ms
-          timeout · last checked {formatRelative(monitor.live.lastCheckedAt)}
+          Every {monitor.interval_seconds}s from 4 regions · incident when {monitor.region_quorum} of 4 fail ·
+          expects HTTP {monitor.expected_status} · {monitor.timeout_ms}ms timeout · last checked{" "}
+          {formatRelative(monitor.live.lastCheckedAt)}
         </p>
       </div>
 
@@ -125,6 +127,7 @@ export function MonitorDetailPage() {
               <th>Status</th>
               <th>HTTP</th>
               <th>Latency</th>
+              <th>Regions</th>
               <th>Detail</th>
             </tr>
           </thead>
@@ -137,6 +140,9 @@ export function MonitorDetailPage() {
                 </td>
                 <td className="mono">{check.http_status ?? "—"}</td>
                 <td className="mono">{check.latency_ms !== null ? `${check.latency_ms}ms` : "—"}</td>
+                <td>
+                  <RegionDots regions={check.regions} />
+                </td>
                 <td className="muted" style={{ whiteSpace: "normal" }}>
                   {check.error ?? ""}
                 </td>
