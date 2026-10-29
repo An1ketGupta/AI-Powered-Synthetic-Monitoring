@@ -56,8 +56,8 @@ export function createFakeEnv(monitors: Monitor[], options: { aiFails?: boolean 
           return stmt;
         },
         async run() {
-          applyWrite(state, sql, stmt.args);
-          return { success: true };
+          const changes = applyWrite(state, sql, stmt.args);
+          return { success: true, meta: { changes } };
         },
         async first<T>() {
           return readFirst(state, sql, stmt.args) as T;
@@ -122,12 +122,21 @@ export function createFakeEnv(monitors: Monitor[], options: { aiFails?: boolean 
     },
     CONSECUTIVE_FAILURES_FOR_INCIDENT: "2",
     SIMILAR_INCIDENTS_TOP_K: "3",
+    CHECK_RETENTION_DAYS: "30",
   } as unknown as Env;
 
   return { env, state };
 }
 
-function applyWrite(state: FakeEnvState, sql: string, args: unknown[]) {
+/** Returns the number of rows changed, mirroring D1's `meta.changes`. */
+function applyWrite(state: FakeEnvState, sql: string, args: unknown[]): number {
+  if (sql.includes("DELETE FROM checks")) {
+    const [cutoff, limit] = args as [string, number];
+    const doomed = new Set(state.checks.filter((c) => (c.checked_at as string) < cutoff).slice(0, limit));
+    state.checks = state.checks.filter((c) => !doomed.has(c));
+    return doomed.size;
+  }
+
   if (sql.includes("INSERT INTO checks")) {
     state.checks.unshift({
       id: state.checks.length + 1,
@@ -138,7 +147,7 @@ function applyWrite(state: FakeEnvState, sql: string, args: unknown[]) {
       error: args[4],
       checked_at: args[5],
     });
-    return;
+    return 1;
   }
 
   if (sql.includes("INSERT INTO incidents")) {
@@ -154,13 +163,13 @@ function applyWrite(state: FakeEnvState, sql: string, args: unknown[]) {
       resolution_summary: null,
       similar_incident_ids: null,
     });
-    return;
+    return 1;
   }
 
   if (sql.includes("UPDATE incidents")) {
     const id = args[args.length - 1] as string;
     const incident = state.incidents.get(id);
-    if (!incident) return;
+    if (!incident) return 0;
 
     if (sql.includes("SET summary")) {
       incident.summary = args[0];
@@ -174,7 +183,10 @@ function applyWrite(state: FakeEnvState, sql: string, args: unknown[]) {
     } else if (sql.includes("SET severity")) {
       incident.severity = args[0];
     }
+    return 1;
   }
+
+  return 0;
 }
 
 function readFirst(state: FakeEnvState, sql: string, args: unknown[]) {

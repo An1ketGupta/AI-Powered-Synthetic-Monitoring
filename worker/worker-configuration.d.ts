@@ -7,6 +7,7 @@ interface Env {
 	CONSECUTIVE_FAILURES_FOR_INCIDENT: "2";
 	SIMILAR_INCIDENTS_TOP_K: "3";
 	PUBLIC_READ_ONLY: "true";
+	CHECK_RETENTION_DAYS: "30";
 	API_TOKEN: string;
 	MONITOR_STATE: DurableObjectNamespace<import("./src/index").MonitorState>;
 	DB: D1Database;

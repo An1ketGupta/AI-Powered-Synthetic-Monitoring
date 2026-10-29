@@ -66,7 +66,7 @@ flowchart TB
 | Service | Role in EdgeWatch |
 |---|---|
 | **Workers** | HTTP API, static-asset serving, cron handler, queue consumer |
-| **Cron Triggers** | Drives the once-a-minute health-check sweep |
+| **Cron Triggers** | Drives the once-a-minute health-check sweep and the daily retention job |
 | **Durable Objects** | One instance per monitor; owns the status state machine with strong consistency |
 | **D1** | Monitors, check history, incident log |
 | **KV** | Hot cache of active-monitor configs for the sweep |
@@ -113,10 +113,10 @@ worker/                      Cloudflare Worker (API, cron, queue consumer, DO)
       summarize.ts           Workers AI incident/resolution notes
       similar.ts             Vectorize embedding + similarity search
       prompts.ts             Prompt construction
-    lib/                     Check execution, incident persistence, validation, KV cache
+    lib/                     Check execution, incident persistence, retention, validation, KV cache
     routes/                  /api/monitors, /api/incidents
-  migrations/0001_init.sql   D1 schema
-  test/                      Vitest suite (32 tests)
+  migrations/                D1 schema (0001) and incremental migrations
+  test/                      Vitest suite (48 tests)
 dashboard/                   React + Vite SPA
 ```
 
@@ -148,7 +148,7 @@ For dashboard development with hot reload, run `npm run dev:dashboard` alongside
 > binding fakes instead, so `npm test` needs no account.
 
 ```bash
-npm test                              # 32 tests, no Cloudflare account needed
+npm test                              # 48 tests, no Cloudflare account needed
 npm run typecheck --workspace=worker
 ```
 
@@ -169,6 +169,7 @@ npx wrangler d1 create edgewatch-db
 # 3. Apply the schema to the remote database
 npm run db:migrate:remote --workspace=worker
 npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0002_summary_source.sql
+npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0003_checks_retention.sql
 
 # 4. KV namespace  -> copy id into wrangler.toml
 npx wrangler kv namespace create CONFIG_CACHE
@@ -216,6 +217,10 @@ caller-supplied URL, so an unauthenticated write path would be an open request p
   and D1 5GB storage. A handful of monitors on a one-minute interval sits far inside all of these.
 - On the Free plan, Queue message retention is fixed at 24 hours (the Paid plan allows up to 14
   days). That only affects undelivered alerts, not incident history, which lives in D1.
+- **Check history is kept for 30 days.** A second cron (`0 3 * * *`) deletes older rows in
+  batches of 5,000, at most 50,000 per run. The cap matters on the Free plan: deleted rows count
+  toward D1's 100k rows-written-per-day allowance, so a large backlog is caught up over a few
+  days rather than in one run that spends the whole day's budget.
 - The cron trigger runs every minute; per-monitor intervals are enforced in the sweep, so a monitor
   set to 300s is checked every five ticks rather than every tick.
 - **A newly-deployed Cron Trigger takes up to 15 minutes to propagate** across Cloudflare's

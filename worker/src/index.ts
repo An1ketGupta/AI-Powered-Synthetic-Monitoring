@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { isPublicReadOnly, requireApiToken } from "./middleware/auth";
 import monitorsRoute from "./routes/monitors";
 import incidentsRoute from "./routes/incidents";
-import { runSweep } from "./scheduled";
+import { runScheduled, runSweep } from "./scheduled";
 import { handleAlertBatch } from "./queue/alerts";
 import type { AlertMessage } from "./types";
 
@@ -46,6 +46,6 @@ app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default {
   fetch: app.fetch,
-  scheduled: (_controller, env, ctx) => ctx.waitUntil(runSweep(env)),
+  scheduled: (controller, env, ctx) => ctx.waitUntil(runScheduled(controller.cron, env)),
   queue: handleAlertBatch,
 } satisfies ExportedHandler<Env, AlertMessage>;

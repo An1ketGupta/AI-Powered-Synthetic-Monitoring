@@ -1,7 +1,19 @@
 import { getActiveMonitors } from "./lib/config-cache";
 import { isDue, runCheck } from "./lib/check";
 import { persistAction, recordCheck } from "./lib/incidents";
+import { pruneOldChecks } from "./lib/retention";
 import type { Monitor } from "./types";
+
+/** Must match the daily entry in wrangler.toml's `crons`; every other tick is a sweep. */
+export const RETENTION_CRON = "0 3 * * *";
+
+export async function runScheduled(cron: string, env: Env): Promise<void> {
+  if (cron === RETENTION_CRON) {
+    await pruneOldChecks(env);
+    return;
+  }
+  await runSweep(env);
+}
 
 /**
  * The health-check sweep. Runs every minute via cron trigger, checks each

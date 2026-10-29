@@ -16,6 +16,9 @@ SIMILAR_INCIDENTS_TOP_K = "3"
 # deployment can be shared as a live demo. Writes always require API_TOKEN.
 # Set to "false" for a private deployment.
 PUBLIC_READ_ONLY = "true"
+# Raw check rows older than this are deleted by the daily retention cron.
+# Incidents are never pruned.
+CHECK_RETENTION_DAYS = "30"
 
 # --- Static assets (React dashboard build) ---------------------------------
 [assets]
@@ -74,6 +77,10 @@ binding = "AI"
 binding = "INCIDENTS_INDEX"
 index_name = "edgewatch-incidents"
 
-# --- Cron Triggers: the edge health-check sweep -----------------------------
+# --- Cron Triggers -----------------------------------------------------------
+# Every minute: the edge health-check sweep.
+# Daily at 03:00 UTC: prune checks older than CHECK_RETENTION_DAYS. The
+# scheduled handler tells them apart by `controller.cron`, so the string here
+# must match RETENTION_CRON in src/scheduled.ts.
 [triggers]
-crons = ["*/1 * * * *"]
+crons = ["*/1 * * * *", "0 3 * * *"]
