@@ -32,7 +32,12 @@ against similar past incidents — instead of just flipping a status dot red.
   incidents are matched against that monitor's history, so a recurring failure is identified as
   recurring rather than described in isolation.
 - **Queue-based alerting** — incident events are published to a Cloudflare Queue, which owns
-  batching and retries independently of the health-check sweep.
+  batching and retries independently of the health-check sweep. An alert that still fails after
+  3 retries moves to a dead-letter queue, whose consumer saves it to D1 so it isn't lost when the
+  queue's 24-hour retention expires.
+- **Bounded history** — a daily cron prunes raw checks older than 30 days (`CHECK_RETENTION_DAYS`)
+  in capped batches, so the checks table stays a fixed size instead of growing ~1,440 rows per
+  monitor per day forever. Incidents and their AI notes are kept.
 - **Dashboard** — React SPA served directly from the Worker: live status, uptime, a latency
   sparkline, check history, and a filterable incident feed.
 
@@ -54,6 +59,8 @@ flowchart TB
     Sweep <-->|"similar past incidents"| Vec[("Vectorize<br/>incident embeddings")]
     Sweep -->|"alert event"| Q["Queue: edgewatch-alerts"]
     Q --> Consumer["Queue consumer<br/>(delivery extension point)"]
+    Q -->|"after 3 failed retries"| DLQ["Queue: edgewatch-alerts-dlq"]
+    DLQ -->|"failed_alerts"| D1
 
     Browser["Browser"] --> API["Worker: Hono API + static assets"]
     API --> D1
@@ -70,7 +77,7 @@ flowchart TB
 | **Durable Objects** | One instance per monitor; owns the status state machine with strong consistency |
 | **D1** | Monitors, check history, incident log |
 | **KV** | Hot cache of active-monitor configs for the sweep |
-| **Queues** | Decouples alert delivery from the check path; owns retries |
+| **Queues** | Decouples alert delivery from the check path; owns retries and dead-lettering |
 | **Workers AI** | Incident/resolution note generation + text embeddings |
 | **Vectorize** | Semantic search over past incidents for correlation |
 | **Workers Assets** | Serves the React dashboard from the same Worker |
@@ -116,7 +123,7 @@ worker/                      Cloudflare Worker (API, cron, queue consumer, DO)
     lib/                     Check execution, incident persistence, retention, validation, KV cache
     routes/                  /api/monitors, /api/incidents
   migrations/                D1 schema (0001) and incremental migrations
-  test/                      Vitest suite (48 tests)
+  test/                      Vitest suite (53 tests)
 dashboard/                   React + Vite SPA
 ```
 
@@ -148,7 +155,7 @@ For dashboard development with hot reload, run `npm run dev:dashboard` alongside
 > binding fakes instead, so `npm test` needs no account.
 
 ```bash
-npm test                              # 48 tests, no Cloudflare account needed
+npm test                              # 53 tests, no Cloudflare account needed
 npm run typecheck --workspace=worker
 ```
 
@@ -170,13 +177,15 @@ npx wrangler d1 create edgewatch-db
 npm run db:migrate:remote --workspace=worker
 npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0002_summary_source.sql
 npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0003_checks_retention.sql
+npx wrangler d1 execute edgewatch-db --remote --file=./migrations/0004_failed_alerts.sql
 
 # 4. KV namespace  -> copy id into wrangler.toml
 npx wrangler kv namespace create CONFIG_CACHE
 
-# 5. Queue. The explicit retention is required: wrangler defaults to 345600s,
+# 5. Queues (main + dead-letter). The explicit retention is required: wrangler defaults to 345600s,
 #    which the Workers Free plan rejects as "queue settings are invalid".
 npx wrangler queues create edgewatch-alerts --message-retention-period-secs 86400
+npx wrangler queues create edgewatch-alerts-dlq --message-retention-period-secs 86400
 
 # 6. Vectorize index (768 dims matches the bge-base-en-v1.5 embedding model)
 npx wrangler vectorize create edgewatch-incidents --dimensions=768 --metric=cosine
@@ -249,6 +258,7 @@ unless `PUBLIC_READ_ONLY` is enabled (see [Public demo mode](#public-demo-mode))
 | `PUT` | `/api/monitors/:id` | Update a monitor (including `is_active` to pause) |
 | `DELETE` | `/api/monitors/:id` | Delete a monitor and reset its Durable Object |
 | `GET` | `/api/incidents?status=open\|resolved` | Incident feed with AI notes |
+| `GET` | `/api/alerts/failed` | Alerts that exhausted their retries and were dead-lettered |
 | `POST` | `/api/sweep` | Run a health-check cycle immediately (what cron does) |
 
 ```bash
@@ -264,5 +274,6 @@ curl -X POST https://<your-worker>/api/monitors \
 
 The queue consumer logs a structured payload rather than shipping a vendor integration.
 `deliver()` in `worker/src/queue/alerts.ts` is the single extension point — implement an outgoing
-webhook, Slack, or email there and the Queue's existing batching and retry behaviour applies
-unchanged.
+webhook, Slack, or email there and the Queue's existing batching, retry, and dead-letter behaviour
+applies unchanged. Because today's `deliver()` only logs, it can't fail, so nothing reaches the
+dead-letter queue until a real transport is added. The path is in place and tested for when one is.
